@@ -120,18 +120,14 @@ Those files remain under their original license.
 Letstream Ventures Pvt Ltd — [theletstream.com](https://www.theletstream.com) —
 [hello@theletstream.com](mailto:hello@theletstream.com)
 
----
-
-<sub>
+## License & disclaimer
 
 **Instadash AI Base** — Copyright (c) Letstream Ventures Pvt Ltd. All rights reserved.
-(Letstream Ventures Pvt Ltd, https://www.theletstream.com, hello@theletstream.com).
+Letstream Ventures Pvt Ltd · https://www.theletstream.com · hello@theletstream.com
 
-The Instadash AI Base template is provided "AS IS", without warranty of any kind, express or
-implied, including merchantability, fitness for a particular purpose and non-infringement, unless
-covered by an explicit written agreement with Letstream Ventures Pvt Ltd. Unauthorized use,
-copying, modification or redistribution of the template, in whole or in part, is prohibited and may
-result in legal action and remedies available under applicable law. Third-party components are
-licensed under their own terms as noted above.
-
-</sub>
+> The Instadash AI Base template is provided "AS IS", without warranty of any kind, express or
+> implied, including merchantability, fitness for a particular purpose and non-infringement, unless
+> covered by an explicit written agreement with Letstream Ventures Pvt Ltd. Unauthorized use,
+> copying, modification or redistribution of the template, in whole or in part, is prohibited and
+> may result in legal action and remedies available under applicable law. Third-party components
+> are licensed under their own terms as noted above.
