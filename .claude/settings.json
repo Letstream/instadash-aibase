@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": {
+    "ra-qm-skills@claude-code-skills": false,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
+  }
+}

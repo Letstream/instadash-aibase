@@ -1,0 +1,19 @@
+# local agent state — never publish
+.remember/
+.claude/state/
+.claude/settings.local.json
+scratchpad/
+
+# python / os noise
+__pycache__/
+*.pyc
+.DS_Store
+
+# secrets, just in case
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.p12
