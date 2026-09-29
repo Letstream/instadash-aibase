@@ -135,7 +135,7 @@ Then run the stack **backgrounded** (never in the foreground — see `AGENTS.md`
 
 ```bash
 nohup poetry run uvicorn app.asgi:application --host 0.0.0.0 --port <backend_port> > .dev.log 2>&1 &
-nohup poetry run celery -A app worker -Q default,emails,maintenance -n local@%h > .celery.log 2>&1 &
+nohup poetry run celery -A app worker -Q default,emails,maintenance -n local@%h --without-gossip --without-mingle > .celery.log 2>&1 &
 curl -s localhost:<backend_port>/api/health/        # {"status": true, "data": {...}, "version": "0.1.0"}
 ```
 

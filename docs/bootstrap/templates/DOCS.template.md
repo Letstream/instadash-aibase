@@ -29,6 +29,7 @@
 | Platforms | web (Vue) / mobile (Flutter: iOS, Android; bundle id `<org.reverse.domain>.<slug>`) / both |
 | Tenancy | multi-tenant / single-tenant — see [multi-tenancy](docs/architecture-guidelines/backend/multi-tenancy.md) |
 | Auth | email + password (DB tokens) <+ Google> <email verification yes/no> |
+| Postgres extensions | none / <pgvector, pg_trgm…> (how the test DB gets them — see [setup](docs/setup.md#postgres-extensions)) |
 | Storage | local / S3 (<bucket/provider>) |
 | Celery queues | `default`, <…> (one worker each) · beat: <jobs or none> |
 | Realtime | none / Channels (added <date>, see [realtime-channels](docs/architecture-guidelines/backend/realtime-channels.md)) |

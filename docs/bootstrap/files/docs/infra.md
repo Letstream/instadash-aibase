@@ -82,7 +82,7 @@ x-backend: &backend
     context: ../backend
     dockerfile: Dockerfile
   image: ${COMPOSE_PROJECT_NAME}/backend:local
-  env_file: ../backend/.env
+  env_file: ../backend/app/.env
   environment: &backend-env
     ENVIRONMENT: local
     DB_HOST: postgres
@@ -108,7 +108,7 @@ x-backend: &backend
 services:
   # ---------- data services (always defined) ----------
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine    # needs extensions? e.g. pgvector/pgvector:pg17, postgis/postgis:17-3.5
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -179,11 +179,11 @@ services:
   # one worker per queue — add/remove to match DOCS.md §3
   celery-default:
     <<: *backend
-    command: celery -A app worker -Q default -n default@%h -l info --workdir app
+    command: celery -A app worker -Q default -n default@%h -l info --without-gossip --without-mingle --workdir app
 
   celery-emails:
     <<: *backend
-    command: celery -A app worker -Q emails -n emails@%h -l info --workdir app
+    command: celery -A app worker -Q emails -n emails@%h -l info --without-gossip --without-mingle --workdir app
 
   celery-beat:
     <<: *backend

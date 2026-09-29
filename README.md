@@ -80,7 +80,11 @@ my-product/                 # shared docs & agent config (not a git repo)
 
 ## Upgrading a project
 
-Copy the newer `docs/bootstrap/` over the old one, restart the agent, run **`/upgrade`**. Untouched
+Projects check GitHub for a newer release once a day (a SessionStart hook; disable with
+`INSTADASH_NO_UPDATE_CHECK=1` or `"update_check": false` in `.instadash.json`) and the agent tells you
+when one exists. `python3 docs/bootstrap/tools/instadash.py fetch-update` downloads it into
+`docs/bootstrap.new/` for review; swap it in (or copy a newer `docs/bootstrap/` manually), restart the
+agent, and run **`/upgrade`**. Untouched
 managed files are replaced automatically; files your project customised are merged with your
 confirmation; `INSTADASH_BASE_VERSION` and the manifest are bumped. See
 [`docs/bootstrap/upgrade.md`](docs/bootstrap/upgrade.md) and the
@@ -103,7 +107,9 @@ Start with [`docs/bootstrap/README.md`](docs/bootstrap/README.md).
 
 ## Contributing
 
-Issues and suggestions are welcome. Changes to the base go under `docs/bootstrap/`; bump `VERSION`,
+Issues and suggestions are welcome. Agents working in an Instadash project generate a prefilled
+issue link for base-kit bugs (`python3 docs/bootstrap/tools/instadash.py issue …`) — you just open
+it and submit. Changes to the base go under `docs/bootstrap/`; bump `VERSION`,
 add a `CHANGELOG.md` entry (with any manual upgrade steps), and verify a simulated install plus the
 affected scaffold before opening a pull request — see [CLAUDE.md](CLAUDE.md). Please don't include
 credentials, customer data or internal hostnames in issues or pull requests.

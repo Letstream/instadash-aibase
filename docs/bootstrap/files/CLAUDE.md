@@ -23,5 +23,7 @@ non-negotiables that must hold on **every** turn.
 5. **Prove it.** Tests + lint + type-check + run it + verify in Chrome before saying "done".
 6. **No secrets** in tracked files — ever.
 7. **License header** on every source file; never touch the lineage version/middleware except via `/upgrade`.
+8. **Base-kit bug?** Fix locally, log it in `handoff.md`, and give the user the prefilled GitHub issue
+   link from `instadash.py issue` (AGENTS.md → *Reporting base-kit bugs*).
 
 @AGENTS.md

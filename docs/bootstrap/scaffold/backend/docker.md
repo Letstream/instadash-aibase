@@ -208,7 +208,7 @@ docker run --rm $ENV $IMG python app/manage.py migrate --noinput         # one-o
 docker run --rm $ENV $IMG python app/manage.py collectstatic --noinput   # one-off (S3 or a volume)
 docker run -d -p 8000:8000 $ENV $IMG gunicorn app.asgi:application \
   -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --chdir app          # web (ASGI)
-docker run -d $ENV $IMG celery -A app --workdir app worker -Q emails -n emails@%h   # one per queue
+docker run -d $ENV $IMG celery -A app --workdir app worker -Q emails -n emails@%h --without-gossip --without-mingle   # one per queue
 docker run -d $ENV $IMG celery -A app --workdir app beat                           # exactly one
 ```
 

@@ -1139,7 +1139,7 @@ onMounted(async () => {
     <div class="select-org">
         <div>
             <h1 class="select-org__title">{{ t("org.chooseTitle") }}</h1>
-            <p class="select-org__subtitle">{{ t("org.chooseSubtitle") }}</p>
+            <p class="select-org__subtitle">{{ t("org.chooseSubtitle", auth.organizations.length) }}</p>
         </div>
 
         <div

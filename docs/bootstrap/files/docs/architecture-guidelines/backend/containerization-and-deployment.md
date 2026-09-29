@@ -60,7 +60,7 @@ gunicorn app.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 -
 gunicorn app.wsgi:application -b 0.0.0.0:8000 --chdir app
 
 # one worker service PER QUEUE (default, emails, maintenance, + any project queues)
-celery -A app --workdir app worker -Q <queue> -n <queue>@%h
+celery -A app --workdir app worker -Q <queue> -n <queue>@%h --without-gossip --without-mingle
 
 # scheduler — exactly one replica
 celery -A app --workdir app beat

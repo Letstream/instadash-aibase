@@ -11,6 +11,9 @@ Follow [`docs/bootstrap/upgrade.md`](../../../docs/bootstrap/upgrade.md) **exact
 `python3 docs/bootstrap/tools/instadash.py` (status / plan / apply / resolved / set-version), run from
 the project root.
 
+If no newer base was copied in yet, `… check-update` then `… fetch-update` (downloads into
+`docs/bootstrap.new/`; swap it in only after the user reviews the changelog).
+
 Guardrails:
 - Never overwrite a `modified` file without showing the user the merge; never touch seed files
   (`docs/data-model.md`) or `DOCS.md` / `handoff.md` beyond logging the upgrade.

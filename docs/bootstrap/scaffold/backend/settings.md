@@ -366,6 +366,9 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_TIME_LIMIT = 300
 CELERY_TASK_SOFT_TIME_LIMIT = 240
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# RabbitMQ 4.x removed transient non-exclusive queues; the remote-control (pidbox) queue must be
+# exclusive or workers crash-loop with "Feature 'transient_nonexcl_queues' is deprecated".
+CELERY_CONTROL_QUEUE_EXCLUSIVE = True
 CELERY_TIMEZONE = "UTC"
 CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_TASK_QUEUES = (Queue("default"), Queue("emails"), Queue("maintenance"))
@@ -604,7 +607,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 
 """Celery application. Config comes from Django settings (CELERY_* namespace).
 
-Workers (one per queue):  celery -A app worker -Q <queue> -n <queue>@%h
+Workers (one per queue):  celery -A app worker -Q <queue> -n <queue>@%h --without-gossip --without-mingle
 Scheduler (exactly one):  celery -A app beat
 """
 

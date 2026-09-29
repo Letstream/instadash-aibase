@@ -7,7 +7,7 @@
 
 ## 0. Automated gates (run first — cheapest signal)
 ```bash
-cd backend  && make lint && make test                 # black/ruff/codespell + pytest (with coverage)
+cd backend/app && make lint && make test                 # black/ruff/codespell + pytest (with coverage)
 cd frontend && npm run lint && npm run type-check && npm run test
 ```
 - Backend tests: [backend/testing](./architecture-guidelines/backend/testing.md). Every tenant model
@@ -22,7 +22,7 @@ scripts/dev.sh                       # data services check/start + backend + cel
 scripts/dev.sh logs                  # tail -n 40 of each — no tracebacks
 curl -si localhost:<BACKEND_PORT>/api/health/  # 200, envelope status:true, header X-Letstream-Instadash-Version
 ```
-Backend sanity: `poetry run python app/manage.py check` clean; `migrate --check` shows nothing pending.
+Backend sanity: `cd backend/app && poetry run python manage.py check` clean; `migrate --check` shows nothing pending.
 Load seed/demo data if the project has a seed command, so screens are populated.
 
 Optionally, before a release: `cd infra && docker compose --profile app up -d --build` and repeat

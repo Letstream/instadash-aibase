@@ -17,3 +17,7 @@ __pycache__/
 *.key
 *.jks
 *.p12
+
+# staged base updates in projects
+docs/bootstrap.new/
+docs/bootstrap.old/

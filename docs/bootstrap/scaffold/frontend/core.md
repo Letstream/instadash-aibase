@@ -557,7 +557,7 @@ vue-i18n message syntax: `{name}` interpolates; never put a literal `@` or `|` i
     "org": {
         "switch": "Switch organisation",
         "chooseTitle": "Choose an organisation",
-        "chooseSubtitle": "You are a member of several organisations.",
+        "chooseSubtitle": "You are a member of {n} organisation. | You are a member of {n} organisations.",
         "none": "You are not a member of any organisation yet."
     },
     "theme": {

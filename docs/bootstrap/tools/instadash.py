@@ -10,6 +10,10 @@ Run from the project root (the folder that contains docs/bootstrap/):
   python3 docs/bootstrap/tools/instadash.py meta --project-name X --slug x --legal-entity "X Pvt Ltd"
   python3 docs/bootstrap/tools/instadash.py skill list|add|remove <name>   # optional skills (then `apply`)
   python3 docs/bootstrap/tools/instadash.py set-version        # sync version into manifest + settings
+  python3 docs/bootstrap/tools/instadash.py issue --title T --component C [--kind bug|gap|docs] < details.md
+  python3 docs/bootstrap/tools/instadash.py wave start|end|status   # parallel subagent wave marker
+  python3 docs/bootstrap/tools/instadash.py check-update [--quiet] [--cached]   # newer release on GitHub?
+  python3 docs/bootstrap/tools/instadash.py fetch-update     # download it into docs/bootstrap.new/ (no replace)
   python3 docs/bootstrap/tools/instadash.py status
 
 The manifest `.instadash.json` records, per installed file, the sha256 of the *base* version last
@@ -20,11 +24,17 @@ project edited it → the agent merges, then `resolved`). See docs/bootstrap/upg
 from __future__ import annotations
 
 import argparse
+import os
 import datetime as dt
 import hashlib
 import json
 import re
 import shutil
+import platform
+import urllib.parse
+import urllib.request
+import tarfile
+import tempfile
 import sys
 from pathlib import Path
 
@@ -35,6 +45,12 @@ OPTIONAL = BASE / "skills"          # optional skills, enabled per project via `
 MANIFEST = ROOT / ".instadash.json"
 # Seed files are created once and then owned by the project — never overwritten by upgrades.
 SEED = {"docs/data-model.md"}
+REPO = "Letstream/instadash-aibase"
+ISSUES_URL = f"https://github.com/{REPO}/issues/new"
+API = f"https://api.github.com/repos/{REPO}"
+UPDATE_CACHE = ROOT / ".claude" / "state" / "update-check.json"
+TAG_RE = re.compile(r"^(?:release-|v)?(\d+(?:\.\d+)*)$")
+MAX_BODY = 6000  # keep the URL well under browser/GitHub limits
 VERSION_RE = re.compile(r'^(INSTADASH_BASE_VERSION\s*=\s*)["\'][^"\']*["\']', re.M)
 
 
@@ -188,6 +204,137 @@ def cmd_skill(a: argparse.Namespace) -> None:
     print(f"optional_skills={m['optional_skills']} — run `apply` to sync")
 
 
+def cmd_issue(a: argparse.Namespace) -> None:
+    """Print a prefilled GitHub "new issue" link for a bug/gap in the base kit (nothing is sent)."""
+    m = load()
+    details = a.body if a.body is not None else sys.stdin.read()
+    body = (
+        f"**Base version:** {m.get('base_version') or base_version()}\n"
+        f"**Component:** {a.component}\n"
+        f"**Environment:** {platform.system()} {platform.release()}, Python {platform.python_version()}\n\n"
+        f"{details.strip()}\n\n"
+        "_Reported via `instadash.py issue`. Contains no secrets or project data._"
+    )
+    if len(body) > MAX_BODY:
+        body = body[: MAX_BODY - 40] + "\n\n…(truncated — add details in the issue)"
+    query = urllib.parse.urlencode(
+        {"title": f"[{a.kind}] {a.title}", "body": body, "labels": a.kind}, quote_via=urllib.parse.quote
+    )
+    print(f"{ISSUES_URL}?{query}")
+
+
+def cmd_wave(a: argparse.Namespace) -> None:
+    """Mark a parallel-agent wave as in progress (pauses the Stop hook's handoff check) or ended."""
+    marker = ROOT / ".claude" / "state" / "parallel-wave"
+    if a.action == "start":
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(f"{dt.datetime.now().isoformat(timespec='seconds')} {a.note or ''}\n")
+        print("wave started — Stop hook handoff check paused (auto-expires after 4h); run `wave end` at integration")
+    elif a.action == "end":
+        marker.unlink(missing_ok=True)
+        print("wave ended — update handoff.md with the integrated result before stopping")
+    else:
+        print(marker.read_text().strip() if marker.exists() else "no wave in progress")
+
+
+def _vtuple(v: str) -> tuple[int, ...]:
+    """'1.10' -> (1, 10) for numeric comparison."""
+    return tuple(int(x) for x in v.split("."))
+
+
+def _get_json(url: str, timeout: float):
+    """GET a GitHub API URL (unauthenticated) and decode JSON."""
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "instadash-update-check"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed https host
+        return json.load(resp)
+
+
+def latest_release(timeout: float = 4.0) -> tuple[str, str] | None:
+    """Return (version, tag) of the newest published base: latest GitHub Release, else newest tag."""
+    try:
+        rel = _get_json(f"{API}/releases/latest", timeout)
+        m = TAG_RE.match(rel.get("tag_name", ""))
+        if m:
+            return m.group(1), rel["tag_name"]
+    except Exception:  # noqa: BLE001 — no release yet / offline: fall back to tags
+        pass
+    try:
+        tags = [t["name"] for t in _get_json(f"{API}/tags?per_page=100", timeout)]
+    except Exception:  # noqa: BLE001 — offline / rate-limited: stay silent
+        return None
+    found = [(m.group(1), t) for t in tags if (m := TAG_RE.match(t))]
+    return max(found, key=lambda x: _vtuple(x[0])) if found else None
+
+
+def cmd_check_update(a: argparse.Namespace) -> None:
+    """Compare the installed base with the newest release on GitHub (cached for a day)."""
+    m = load()
+    if m.get("update_check") is False or os.environ.get("INSTADASH_NO_UPDATE_CHECK"):
+        return
+    installed = m.get("base_version") or base_version()
+    cache = {}
+    if UPDATE_CACHE.is_file():
+        try:
+            cache = json.loads(UPDATE_CACHE.read_text())
+        except json.JSONDecodeError:
+            cache = {}
+    fresh = cache.get("checked_on") == dt.date.today().isoformat()
+    if a.cached and fresh:
+        latest = cache.get("latest")
+    else:
+        latest = latest_release()
+        UPDATE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        UPDATE_CACHE.write_text(json.dumps({"checked_on": dt.date.today().isoformat(), "latest": latest}))
+    if not latest:
+        if not a.quiet:
+            print(f"installed {installed}; could not reach GitHub (offline or rate-limited)")
+        return
+    version, tag = latest
+    if _vtuple(version) > _vtuple(installed):
+        print(f"Instadash AI Base {version} is available (this project has {installed}). "
+              f"Release: https://github.com/{REPO}/releases/tag/{tag} — to update: "
+              "`python3 docs/bootstrap/tools/instadash.py fetch-update`, review, then `/upgrade`.")
+    elif not a.quiet:
+        print(f"up to date: {installed} (latest {version})")
+
+
+def cmd_fetch_update(a: argparse.Namespace) -> None:
+    """Download the newest release's docs/bootstrap into docs/bootstrap.new/ for review (no replace)."""
+    latest = latest_release(timeout=15)
+    if not latest:
+        sys.exit("could not reach GitHub")
+    version, tag = latest
+    dest = ROOT / "docs" / "bootstrap.new"
+    if dest.exists():
+        sys.exit(f"{dest.relative_to(ROOT)} already exists — review or delete it first")
+    url = f"https://codeload.github.com/{REPO}/tar.gz/refs/tags/{tag}"
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "base.tar.gz"
+        req = urllib.request.Request(url, headers={"User-Agent": "instadash-update-check"})
+        with urllib.request.urlopen(req, timeout=60) as resp, open(archive, "wb") as fh:  # noqa: S310
+            shutil.copyfileobj(resp, fh)
+        with tarfile.open(archive) as tar:
+            for member in tar.getmembers():
+                parts = Path(member.name).parts
+                if len(parts) < 3 or parts[1:3] != ("docs", "bootstrap"):
+                    continue
+                if not (member.isfile() or member.isdir()) or ".." in parts:
+                    continue  # no links/devices, no path traversal
+                target = dest.joinpath(*parts[3:])
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(member) as src, open(target, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                target.chmod(0o755 if member.mode & 0o111 else 0o644)
+    got = (dest / "VERSION").read_text().strip() if (dest / "VERSION").is_file() else "?"
+    print(f"downloaded {tag} (VERSION {got}) into docs/bootstrap.new/ — review its CHANGELOG, then:\n"
+          "  mv docs/bootstrap docs/bootstrap.old && mv docs/bootstrap.new docs/bootstrap\n"
+          "and run /upgrade (delete docs/bootstrap.old once the upgrade is verified).")
+
+
 def cmd_meta(a: argparse.Namespace) -> None:
     """Record project identity used by the license header hook and bootstrap."""
     m = load()
@@ -239,6 +386,21 @@ def main() -> None:
     sk = sub.add_parser("skill")
     sk.add_argument("action", choices=["list", "add", "remove"]); sk.add_argument("name", nargs="?")
     sk.set_defaults(fn=cmd_skill)
+    cu = sub.add_parser("check-update", help="compare with the newest GitHub release")
+    cu.add_argument("--quiet", action="store_true", help="print only when an update exists")
+    cu.add_argument("--cached", action="store_true", help="use today's cached result if present")
+    cu.set_defaults(fn=cmd_check_update)
+    sub.add_parser("fetch-update", help="download the newest release into docs/bootstrap.new/").set_defaults(
+        fn=cmd_fetch_update)
+    wv = sub.add_parser("wave", help="parallel-agent wave marker for the Stop hook")
+    wv.add_argument("action", choices=["start", "end", "status"]); wv.add_argument("--note")
+    wv.set_defaults(fn=cmd_wave)
+    iss = sub.add_parser("issue", help="print a prefilled GitHub issue link for a base-kit bug")
+    iss.add_argument("--title", required=True)
+    iss.add_argument("--component", required=True, help="e.g. scaffold/backend, hooks/stop-handoff, infra.md")
+    iss.add_argument("--kind", default="bug", choices=["bug", "gap", "docs"])
+    iss.add_argument("--body", help="markdown details; read from stdin when omitted")
+    iss.set_defaults(fn=cmd_issue)
     sub.add_parser("set-version").set_defaults(fn=cmd_set_version)
     sub.add_parser("status").set_defaults(fn=cmd_status)
     a = p.parse_args()

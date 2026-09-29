@@ -4,6 +4,13 @@
 > Bring an installed project up to the base version now in `docs/bootstrap/` (the user copied a
 > newer folder over it). Run from the project root.
 
+0. **Get the new base** (skip if the user already copied it in). A SessionStart hook checks GitHub
+   once a day and tells you when a newer release exists (`instadash.py check-update` does it on
+   demand). Fetch it for review — nothing is replaced automatically:
+   `python3 docs/bootstrap/tools/instadash.py fetch-update` → `docs/bootstrap.new/`. Show the user its
+   CHANGELOG entries, then on their go-ahead:
+   `mv docs/bootstrap docs/bootstrap.old && mv docs/bootstrap.new docs/bootstrap`
+   (delete `docs/bootstrap.old` once the upgrade is verified).
 1. **Compare versions.** `python3 docs/bootstrap/tools/instadash.py status` → installed vs available.
    Equal → nothing to do (offer `plan` to check for drift). Available older → stop and tell the user.
 2. **Read the changelog** entries between the two versions in [CHANGELOG.md](./CHANGELOG.md) —

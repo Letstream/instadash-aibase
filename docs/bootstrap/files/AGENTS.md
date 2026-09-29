@@ -84,6 +84,29 @@ upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
   `infra/docker/data/`.
 - Be concise in responses: what changed / what failed in one or two bullets.
 
+## Reporting base-kit bugs (send feedback)
+
+When you find a bug or gap in the **Instadash AI Base itself** — anything shipped from
+`docs/bootstrap/` (installed rules, hooks, skills, guidelines, scaffolds, templates, `instadash.py`)
+rather than in this project's own code:
+
+1. **Unblock the project** with the smallest local fix, and log it in `handoff.md` (*Known issues*)
+   as a base-kit bug so `/upgrade` merges don't silently undo it.
+2. **Give the user a one-click report link** — generate it, don't send anything yourself:
+   ```bash
+   python3 docs/bootstrap/tools/instadash.py issue --kind bug \
+     --title "<short summary>" --component "<e.g. scaffold/backend, hooks/stop-handoff, infra.md>" \
+     --body $'**What happened:** <observed vs expected, exact error>\n**Where:** <path:line>\n**Repro:** <steps>\n**Local fix / workaround:** <what unblocked the project>'
+   ```
+   Show the printed URL to the user with a one-line summary; they open it and submit (it prefills
+   title, labels, base version, component and environment on
+   `github.com/Letstream/instadash-aibase`).
+3. **Never include** secrets, `.env` values, hostnames, customer data, proprietary project code or the
+   legal entity's internal details — describe the base-kit problem generically. Show the user the
+   text before they submit if in doubt.
+
+One issue per bug; group trivially related findings. Project-specific bugs don't belong there.
+
 ## Environment & tooling hygiene
 
 **Finding things**
@@ -125,7 +148,7 @@ upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
   (**RabbitMQ** broker, one worker per queue), Redis (cache), `django-auditlog`, drf-spectacular.
   Django Channels **only** when a project needs websockets
   ([realtime-channels](./docs/architecture-guidelines/backend/realtime-channels.md)).
-  Run everything via Poetry: `cd backend && poetry run python app/manage.py …`.
+  Run everything via Poetry from the Poetry project dir: `cd backend/app && poetry run python manage.py …`.
 - Every API endpoint subclasses the base views in `apps/core/views.py`
   (`AnonymousView` / `AuthenticatedView` / `AdminOnlyView`). All routes live under `/api/`. Responses use the
   `{status, data, version}` envelope applied by `apps.core.api_renderers.LetstreamAPIRenderer` —
@@ -148,7 +171,7 @@ upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
 
 ### Scaffolding & migrations — use Django commands, never hand-write
 
-- **Create apps with the command:** `poetry run python app/manage.py startapp <name> apps/<name>`
+- **Create apps with the command:** `cd backend/app && poetry run python manage.py startapp <name> apps/<name>`
   (each app in its own dir under `apps/`). Never hand-author `apps.py`/boilerplate.
 - **Generate migrations with the command:** `makemigrations <app>` — **never** hand-write a
   migration file. Review the generated migration, then `migrate`.
@@ -165,6 +188,12 @@ Subagents may build independent pieces in parallel. Protocol:
    (`settings`, root `urls.py`, `INSTALLED_APPS`). It reports the integration points instead.
 3. The **lead** wires integration points, runs `makemigrations`/`migrate` **centrally in
    dependency order**, and QA-verifies.
+
+**Wave marker (Stop hook):** before spawning background subagents that edit code, the lead runs
+`python3 docs/bootstrap/tools/instadash.py wave start --note "<what the wave builds>"` and adds one
+"🚧 wave in progress: …" line to `handoff.md`. While the marker exists (max 4 h) the Stop hook won't
+demand a final handoff on each wait cycle. At integration: `… wave end`, then write the real
+`handoff.md` entry — the hook is active again from that point.
 Never let two agents run `makemigrations` concurrently or edit the same file.
 
 ## Vue frontend

@@ -81,6 +81,10 @@
     command -v redis-cli && redis-cli -p 6379 ping
     docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null
     ```
+10b. **Postgres extensions** — does the project need any (`pgvector`, `postgis`, `pg_trgm`,
+    `unaccent`, `citext`…)? With compose, pick an image that ships them (e.g. `pgvector/pgvector:pg17`,
+    `postgis/postgis:17-3.5`). With an existing server, check they're installed and plan how the
+    **test database** gets them — see [setup.md](../setup.md#postgres-extensions).
 11. For **each** service ask: **use the existing server** or **run a dedicated one via Docker
     Compose**?
     - *Existing* → ask host, port, user, **password**, database / vhost. Verify connectivity

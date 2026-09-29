@@ -92,9 +92,9 @@ CELERY_TASK_ROUTES = {
 Each queue gets its own worker, named after the queue:
 
 ```bash
-celery -A app worker -Q default     -n default@%h
-celery -A app worker -Q emails      -n emails@%h
-celery -A app worker -Q maintenance -n maintenance@%h
+celery -A app worker -Q default     -n default@%h --without-gossip --without-mingle
+celery -A app worker -Q emails      -n emails@%h --without-gossip --without-mingle
+celery -A app worker -Q maintenance -n maintenance@%h --without-gossip --without-mingle
 ```
 
 (In containers, whose working dir is the repo root, add `--workdir app`.) In the infra compose
@@ -108,6 +108,11 @@ and add a worker service ([containerization-and-deployment](containerization-and
 
 Scheduled/maintenance work runs via `CELERY_BEAT_SCHEDULE` (crontab), executed by a **single**
 `celery -A app beat` process (never run two — you'll double-fire).
+
+**RabbitMQ 4.x:** keep `CELERY_CONTROL_QUEUE_EXCLUSIVE = True` (the scaffold sets it) — RabbitMQ 4 removed
+transient non-exclusive queues, and without it every worker crash-loops on the remote-control queue
+(`Feature 'transient_nonexcl_queues' is deprecated`). Workers run `--without-gossip --without-mingle`
+(no worker-to-worker chatter; `celery inspect ping` still works).
 
 ```python
 CELERY_BEAT_SCHEDULE = {
