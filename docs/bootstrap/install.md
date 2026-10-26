@@ -1,53 +1,41 @@
 <!-- Instadash AI Base — (c) Letstream Ventures Pvt Ltd. See README.md for terms. -->
 # Install — "Read docs/bootstrap folder and do the initial steps"
 
-> What the agent does when the user drops this folder into `<project-root>/docs/bootstrap/` and asks
-> for the initial steps. Run everything from the **project root**.
+Run from the project workspace root. This is the shippable base's install procedure; never run it
+inside the AI Base source repository itself.
 
-## Steps
+1. Identify the agent actually running: Claude Code or Codex. Do not infer it from existing agent
+   directories. Use that agent's command syntax throughout the user handover; see
+   [agent-compatibility.md](./agent-compatibility.md).
+2. If `.instadash.json` exists, follow [upgrade.md](./upgrade.md). Otherwise announce a fresh
+   install and read VERSION. Check whether an application already exists outside `docs/`;
+   application manifests inside backend/frontend/mobile also count.
+3. Run `python3 docs/bootstrap/tools/instadash.py plan`. Show conflicting files. Preserve existing
+   custom instructions, permissions, plugins and adapted skills; merge rather than replacing them.
+   Project rules belong in `DOCS.md` §9. No existing Git root or application layout is changed.
+4. Run `python3 docs/bootstrap/tools/instadash.py apply --agent <claude|codex>`.
+   This installs AGENTS/CLAUDE rules, both native adapters, shared `.instadash/hooks/`, all mandatory
+   `core-skills/` into both `.claude/skills/` and `.agents/skills/`, and project docs. It records
+   initialized/preferred agent and managed hashes in `.instadash.json`, and seeds empty DOCS/handoff
+   only when missing. Existing optional skills retain their selections.
+5. Merge each `modified` file, then `… resolved <path>` and `… set-version`. Settings merges must
+   preserve existing permissions/hooks/plugin choices while adding the native Instadash hooks.
+   Native settings use `.claude/settings.json` and `.codex/hooks.json`. Do not add hooks both inline
+   and in hooks.json at the same Codex layer. Review pre-existing inline hooks for duplicate
+   Instadash registrations; preserve unrelated hooks. Keep legacy `.claude/hooks/` adapters during
+   upgrade compatibility. `docs/data-model.md` is seeded once; DOCS/handoff stay project-owned.
+6. Run `… doctor --agent <current-agent>`. Validate both JSON files. Existing component directories
+   receive their own entry points, skill copies and hook configuration; repeat apply after new
+   components are created.
+7. End with a prominent **agent-specific** handover:
+   - State the installed version and any unresolved merges or activation gates.
+   - Start a new session in this workspace so project instructions reload.
+   - Claude: use `/bootstrap` for a new app or `/migrate-to-instadash` for an existing app.
+   - Codex: use `$bootstrap` or `$migrate-to-instadash`; review/trust new/changed hooks in the
+     native client (CLI `/hooks`) and trust project configuration. Skill changes normally reload.
+   - Explain only the current agent's commands to the user. Do not claim hooks are active based on
+     files existing. The helper prints the appropriate instructions.
 
-1. **Detect the situation.**
-   - `.instadash.json` exists → this is an **upgrade**; follow [upgrade.md](./upgrade.md) instead.
-   - Otherwise → fresh install. Say so in one line, with the version from [`VERSION`](./VERSION).
-   - Note whether the root already contains an **application** (source dirs or manifests such as
-     `package.json`, `requirements.txt`, `pyproject.toml`, `app.py`, `manage.py`, `composer.json`,
-     templates) outside `docs/`. If so, the next step after install is **`/migrate-to-instadash`**
-     ([migrate.md](./migrate.md)), not `/bootstrap`.
-2. **Plan.** `python3 docs/bootstrap/tools/instadash.py plan` and show the user the result.
-   Files listed as `modified` already exist with different content (e.g. an older `AGENTS.md`):
-   for each, ask **replace / merge / keep**. Merging = keep the project's own additions, adopt the
-   base's rules; project-specific rules belong in `DOCS.md` §9, not `AGENTS.md`.
-3. **Apply.** `python3 docs/bootstrap/tools/instadash.py apply` — copies [`files/`](./files/) into
-   place (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*`,
-   `.claude/skills/*` (project + core vendored skills — see [skills-hub.md](./skills-hub.md)), `docs/*` incl.
-   `docs/architecture-guidelines/`), writes `.instadash.json`, and creates empty `DOCS.md` /
-   `handoff.md`. After resolving any merges: `… resolved <path>` then `… set-version`.
-4. **Check.** `ls .claude/hooks` (executable), `python3 -m json.tool .claude/settings.json`.
-   If the project already had a `.claude/settings.json` with its own permissions/hooks, merge rather
-   than replace (personal tweaks go in `.claude/settings.local.json`).
-5. **Hand over — the restart notice is mandatory.** End the turn with this, verbatim in substance
-   and visually prominent (the person who runs Bootstrap may not have seen install happen):
-
-   > ✅ Instadash AI Base `<version>` installed.
-   > ⚠️ **Restart this agent session now** (exit and start it again in this folder). The hooks and the
-   > `/bootstrap`, `/upgrade`, `/migrate-to-instadash` commands were installed into this workspace and
-   > only load when a session starts.
-   > Next: **`/bootstrap`** for a new project — or **`/migrate-to-instadash`** because this folder
-   > already contains an application *(say which one applies)*.
-
-Do **not** start the interview automatically in the same turn unless the user asks — install and
-Bootstrap are separate steps.
-
-## What gets installed where
-
-| Source (`docs/bootstrap/files/…`) | Destination | Policy |
-|---|---|---|
-| `AGENTS.md`, `CLAUDE.md` | project root | managed |
-| `.claude/settings.json`, `.claude/hooks/*`, `.claude/skills/*` | `.claude/` | managed |
-| `docs/*.md` (setup, infra, conventions, security, qa, compliance) | `docs/` | managed |
-| `docs/architecture-guidelines/**` | `docs/architecture-guidelines/` | managed |
-| `docs/data-model.md` | `docs/` | **seed** — created once, then owned by the project |
-
-*Managed* files are owned by the base: `/upgrade` replaces them when untouched and asks for a merge
-when the project changed them. Scaffolds, templates and the interview stay in `docs/bootstrap/` and
-are read from there.
+Do not start the application interview automatically unless requested. Both native integrations
+are always installed; switching preferred agents later uses the native `instadash-agent-migrate`
+command and never implicitly starts an application architecture migration.

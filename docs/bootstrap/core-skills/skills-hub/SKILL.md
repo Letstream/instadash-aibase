@@ -15,7 +15,7 @@ Follow [`docs/bootstrap/skills-hub.md`](../../../docs/bootstrap/skills-hub.md):
 3. **Optional vendored first** — if it's in `docs/bootstrap/skills/`, just
    `python3 docs/bootstrap/tools/instadash.py skill add <name>` then `… apply`.
 4. **Otherwise vet & vendor** exactly per §3 (fetch one skill, read every file, license, `UPSTREAM.md`,
-   marked *Instadash stack mapping*), into `.claude/skills/<name>/`.
+   marked *Instadash stack mapping*), into `.claude/skills/<name>/` and `.agents/skills/<name>/`.
 5. **Record** in `DOCS.md` §3 and `handoff.md`; tell the user to restart the session to load it.
 
 Never install a skill you haven't read in full; never let a vendored skill override the project docs.

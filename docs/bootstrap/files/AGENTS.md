@@ -6,6 +6,17 @@
 > read it directly). This file holds **only** working/coding rules — architecture lives in
 > [`DOCS.md`](./DOCS.md) + [`docs/`](./docs/).
 
+## Native agent compatibility
+
+Read `docs/bootstrap/agent-compatibility.md`. This workspace installs Claude and Codex natively
+with the same mandatory core skills. Use `/skill-name` for Claude and `$skill-name` for Codex in
+user-facing instructions. Detect the current runtime, then compare `.instadash.json`'s
+`preferred_agent` (missing in legacy installs means Claude). If different, tell the user once
+and suggest the current agent's `instadash-agent-migrate` command if they plan to keep using it.
+Do not switch automatically or invoke application architecture migration for an agent switch.
+If hooks are unavailable or untrusted, perform this check yourself. Follow the host instruction
+hierarchy; shared project standards do not override explicit user or system instructions.
+
 ## 0. Mandatory first step (every session, before ANY change)
 
 1. **Bootstrap check.** If `DOCS.md` **or** `handoff.md` is empty (0 bytes / whitespace only), this
@@ -26,7 +37,7 @@
 Do not guess how a subsystem works — align with the docs first.
 
 **Precedence:** this file → `DOCS.md` (incl. §9 project rules) → `docs/architecture-guidelines`
-(Canonical decisions) → project skills in `.claude/skills/` → plugin skills. Plugin skills are
+(Canonical decisions) → project skills in `.claude/skills/` (Claude) or `.agents/skills/` (Codex) → plugin skills. Plugin skills are
 welcome for anything the docs don't cover, but never override the docs, the Bootstrap / migrate /
 upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
 
@@ -40,10 +51,11 @@ upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
   - `handoff.md` — the **human-readable** project journal: status table, next up, known issues, and a
     dated log entry per task. Curated, complete sentences, safe to show anyone on the team.
   - **`remember`** (plugin; `.remember/`) — the **agent's** session continuity: a terse
-    state/next/context note for the next session, saved with the `remember` skill at the end of a
+    state/next/context note for the next session, saved with the `remember` skill when available at the end of a
     work session (and read automatically at session start). Point to `handoff.md` sections instead of
     duplicating them; put agent-only context there (gotchas, half-finished commands, branch names).
-  - At session start read both; if they disagree, `handoff.md` wins — fix the `remember` note.
+  - If the plugin is unavailable, use `handoff.md` directly; never read private native memory files.
+  - At session start read available continuity records; if they disagree, `handoff.md` wins — fix the `remember` note.
 - New model or relation → update [`docs/data-model.md`](./docs/data-model.md).
 - New infra service/port/env var → update `DOCS.md`, [`docs/infra.md`](./docs/infra.md) and both
   `.env.example` files.
@@ -54,10 +66,10 @@ upgrade flows, or `frontend-design-guidelines` (see *Plugins & skills* below).
 ## Repos & layout
 
 - The project root is **not** a git repo — it holds the shared docs (`AGENTS.md`, `CLAUDE.md`,
-  `DOCS.md`, `handoff.md`, `docs/`), `.claude/`, `scripts/`, and the base manifest `.instadash.json`.
+  `DOCS.md`, `handoff.md`, `docs/`), `.claude/`, `.agents/`, `.codex/`, `.instadash/`, `scripts/`, and the base manifest `.instadash.json`.
 - `docs/bootstrap/` is the **Instadash AI Base** itself (versioned; scaffolds, templates, interview,
   install/upgrade). Never edit it in a project — `/upgrade` replaces it. Files installed from it
-  (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `docs/…`) are *managed*: project-specific rules go in
+  (`AGENTS.md`, `CLAUDE.md`, native adapter directories, `docs/…`) are *managed*: project-specific rules go in
   `DOCS.md` §9.
 - `backend/`, `frontend/`, `infra/` (and `mobile/` when the project has one) are **separate git repos**
   in this directory. Commit in
@@ -190,10 +202,11 @@ Subagents may build independent pieces in parallel. Protocol:
    dependency order**, and QA-verifies.
 
 **Wave marker (Stop hook):** before spawning background subagents that edit code, the lead runs
-`python3 docs/bootstrap/tools/instadash.py wave start --note "<what the wave builds>"` and adds one
+`python3 docs/bootstrap/tools/instadash.py wave start --agent <current-agent> --session <native-session-id> --note "<what the wave builds>"` and adds one
 "🚧 wave in progress: …" line to `handoff.md`. While the marker exists (max 4 h) the Stop hook won't
-demand a final handoff on each wait cycle. At integration: `… wave end`, then write the real
+demand a final handoff on each wait cycle. At integration: `… wave end --agent <current-agent> --session <native-session-id>`, then write the real
 `handoff.md` entry — the hook is active again from that point.
+If the native session id is unavailable, omit the pause rather than guessing.
 Never let two agents run `makemigrations` concurrently or edit the same file.
 
 ## Vue frontend
@@ -260,10 +273,12 @@ Never let two agents run `makemigrations` concurrently or edit the same file.
 
 ## Formatting & linting (enforced by hooks)
 
-`.claude/settings.json` runs `.claude/hooks/format-lint.sh` after every file edit: **black + ruff**
+Claude `.claude/settings.json` and Codex `.codex/hooks.json` run shared `.instadash/hooks/`
+checks after supported edits (including multi-file patches and shell writes): **black + ruff**
 for Python, **prettier + eslint** for `.vue/.ts/.js/.scss/.css/.json`, **dart format + dart analyze**
 for `.dart`. Unfixable lint errors are
-reported back — fix them before moving on. CI runs the same (`make lint`, `npm run lint`).
+reported back — fix them before moving on. CI runs the same (`make lint`, `npm run lint`). Missing formatter tools are reported by explicit
+verification; hook presence alone does not prove enforcement. See `docs/bootstrap/agent-compatibility.md`.
 
 ## QA — MANDATORY before declaring anything "done"
 

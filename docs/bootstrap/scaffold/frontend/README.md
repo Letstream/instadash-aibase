@@ -8,7 +8,7 @@
 >
 > Rationale lives in [`../../architecture-guidelines/frontend/`](../../../architecture-guidelines/frontend/)
 > and the design rules in the `frontend-design-guidelines` skill
-> (`.claude/skills/frontend-design-guidelines/SKILL.md`). If anything disagrees, the
+> (`.claude/skills/frontend-design-guidelines/SKILL.md` (Claude) or `.agents/skills/frontend-design-guidelines/SKILL.md` (Codex)). If anything disagrees, the
 > [canonical decisions table](../../../architecture-guidelines/README.md#canonical-decisions-these-win-over-any-older-wording)
 > wins — fix whichever page is wrong.
 

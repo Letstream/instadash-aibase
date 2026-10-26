@@ -4,7 +4,7 @@
 > Standard layout and core patterns for a Vue 3 + TypeScript + Vite SPA (PrimeVue 4 + Tailwind v4 +
 > SCSS, Pinia, vue-router, axios, vue-i18n). This page covers structure, tooling, bootstrap, the
 > layered data layer, state, routing, layouts and theming. Component-level rules live in the
-> `frontend-design-guidelines` skill (`.claude/skills/frontend-design-guidelines/SKILL.md`);
+> `frontend-design-guidelines` skill (`.claude/skills/frontend-design-guidelines/SKILL.md` (Claude) or `.agents/skills/frontend-design-guidelines/SKILL.md` (Codex));
 > reusable building blocks in [shared-components](shared-components.md); tests in
 > [testing](testing.md). The runnable reference is the [frontend scaffold](../../bootstrap/scaffold/frontend/README.md).
 

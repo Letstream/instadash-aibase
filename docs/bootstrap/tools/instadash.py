@@ -5,13 +5,15 @@
 Run from the project root (the folder that contains docs/bootstrap/):
 
   python3 docs/bootstrap/tools/instadash.py plan               # what install/upgrade would do
-  python3 docs/bootstrap/tools/instadash.py apply              # copy new + cleanly-updatable files
+  python3 docs/bootstrap/tools/instadash.py apply --agent codex # install (use claude in Claude Code)
+  python3 docs/bootstrap/tools/instadash.py agent-migrate --agent codex # switch preferred agent
+  python3 docs/bootstrap/tools/instadash.py doctor --agent codex # inspect integration status
   python3 docs/bootstrap/tools/instadash.py resolved <path>... # after merging a modified file
   python3 docs/bootstrap/tools/instadash.py meta --project-name X --slug x --legal-entity "X Pvt Ltd"
   python3 docs/bootstrap/tools/instadash.py skill list|add|remove <name>   # optional skills (then `apply`)
   python3 docs/bootstrap/tools/instadash.py set-version        # sync version into manifest + settings
   python3 docs/bootstrap/tools/instadash.py issue --title T --component C [--kind bug|gap|docs] < details.md
-  python3 docs/bootstrap/tools/instadash.py wave start|end|status   # parallel subagent wave marker
+  python3 docs/bootstrap/tools/instadash.py wave start|end|status --agent codex --session ID
   python3 docs/bootstrap/tools/instadash.py check-update [--quiet] [--cached]   # newer release on GitHub?
   python3 docs/bootstrap/tools/instadash.py fetch-update     # download it into docs/bootstrap.new/ (no replace)
   python3 docs/bootstrap/tools/instadash.py status
@@ -38,9 +40,18 @@ import tempfile
 import sys
 from pathlib import Path
 
-ROOT = Path.cwd()
+def workspace_root() -> Path:
+    """Find the installed workspace even when invoked inside a component Git repository."""
+    for candidate in (Path.cwd(), *Path.cwd().parents):
+        if (candidate / "docs/bootstrap/files").is_dir():
+            return candidate
+    return Path.cwd()
+
+
+ROOT = workspace_root()
 BASE = ROOT / "docs" / "bootstrap"
 FILES = BASE / "files"
+CORE = BASE / "core-skills"
 OPTIONAL = BASE / "skills"          # optional skills, enabled per project via `skill add`
 MANIFEST = ROOT / ".instadash.json"
 # Seed files are created once and then owned by the project — never overwritten by upgrades.
@@ -48,7 +59,7 @@ SEED = {"docs/data-model.md"}
 REPO = "Letstream/instadash-aibase"
 ISSUES_URL = f"https://github.com/{REPO}/issues/new"
 API = f"https://api.github.com/repos/{REPO}"
-UPDATE_CACHE = ROOT / ".claude" / "state" / "update-check.json"
+UPDATE_CACHE = ROOT / ".instadash" / "state" / "update-check.json"
 TAG_RE = re.compile(r"^(?:release-|v)?(\d+(?:\.\d+)*)$")
 MAX_BODY = 6000  # keep the URL well under browser/GitHub limits
 VERSION_RE = re.compile(r'^(INSTADASH_BASE_VERSION\s*=\s*)["\'][^"\']*["\']', re.M)
@@ -74,7 +85,9 @@ def load() -> dict:
 
 def save(m: dict) -> None:
     """Write the manifest."""
-    MANIFEST.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n")
+    temporary = MANIFEST.with_name(f".instadash.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n")
+    temporary.replace(MANIFEST)
 
 
 def entry(m: dict, rel: str) -> dict | None:
@@ -83,21 +96,54 @@ def entry(m: dict, rel: str) -> dict | None:
     return {"base": e, "local": e} if isinstance(e, str) else e
 
 
+_SHIPPED_CACHE = {}
+
+
 def shipped(m: dict) -> dict[str, Path]:
     """Map every managed destination path (relative to the project root) to its source in the base."""
+    key = (tuple(m.get("optional_skills", [])), tuple(name for name in ("backend", "frontend", "mobile", "infra")
+           if (ROOT / name).is_dir() and not (ROOT / name).is_symlink()))
+    if key in _SHIPPED_CACHE:
+        return _SHIPPED_CACHE[key]
     out = {p.relative_to(FILES).as_posix(): p for p in FILES.rglob("*") if p.is_file()}
+    skills = {p.name: p for p in CORE.iterdir() if p.is_dir()}
     for name in m.get("optional_skills", []):
-        src_dir = OPTIONAL / name
-        for p in src_dir.rglob("*") if src_dir.is_dir() else []:
-            if p.is_file():
-                out[f".claude/skills/{name}/{p.relative_to(src_dir).as_posix()}"] = p
+        if name not in {p.name for p in OPTIONAL.iterdir() if p.is_dir()}:
+            raise ValueError(f"unknown optional skill: {name}")
+        skills[name] = OPTIONAL / name
+    scopes = [""] + [f"{name}/" for name in ("backend", "frontend", "mobile", "infra")
+                     if (ROOT / name).is_dir() and not (ROOT / name).is_symlink()]
+    for scope in scopes:
+        for directory in (".claude/skills", ".agents/skills"):
+            for name, source in skills.items():
+                for path in source.rglob("*"):
+                    if path.is_file():
+                        out[f"{scope}{directory}/{name}/{path.relative_to(source).as_posix()}"] = path
+        if scope:
+            out[scope + "AGENTS.md"] = BASE / "templates/component-AGENTS.md"
+            out[scope + "CLAUDE.md"] = BASE / "templates/component-CLAUDE.md"
+            out[scope + ".claude/settings.json"] = FILES / ".claude/settings.json"
+            out[scope + ".codex/hooks.json"] = FILES / ".codex/hooks.json"
+
+    _SHIPPED_CACHE[key] = out
     return out
+
+
+def source_bytes(m: dict, rel: str) -> bytes:
+    data = shipped(m)[rel].read_bytes()
+    if rel.split("/", 1)[0] in ("backend", "frontend", "mobile", "infra") and rel.endswith(".md"):
+        data = data.replace(b"../../../docs/", b"../../../../docs/")
+    return data
+
+
+def source_sha(m: dict, rel: str) -> str:
+    return hashlib.sha256(source_bytes(m, rel)).hexdigest()
 
 
 def record(m: dict, rel: str) -> None:
     """Record the current base hash and the project's current local hash for a path."""
     dst, src = ROOT / rel, shipped(m)[rel]
-    m["files"][rel] = {"base": sha(src), "local": sha(dst) if dst.is_file() else None}
+    m["files"][rel] = {"base": source_sha(m, rel), "local": sha(dst) if dst.is_file() else None}
 
 
 def classify(m: dict) -> dict[str, list[str]]:
@@ -112,11 +158,11 @@ def classify(m: dict) -> dict[str, list[str]]:
             out["new"].append(rel)
         elif rel in SEED:
             out["seed-kept"].append(rel)
-        elif sha(dst) == sha(src):
+        elif sha(dst) == source_sha(m, rel):
             out["unchanged"].append(rel)
         elif e and sha(dst) == e["base"]:
             out["update"].append(rel)          # untouched locally, base changed
-        elif e and e["base"] == sha(src):
+        elif e and e["base"] == source_sha(m, rel):
             out["customized"].append(rel)      # project edits on the current base — nothing to do
         else:
             out["modified"].append(rel)        # base changed AND project edited (or pre-existing) — merge
@@ -139,22 +185,49 @@ def copy(m: dict, rel: str) -> None:
     """Copy one shipped file into place, preserving the executable bit."""
     src, dst = shipped(m)[rel], ROOT / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
+    data = source_bytes(m, rel)
+    if "/skills/" in rel and not dst.exists():
+        candidates = []
+        if ".agents/skills/" in rel:
+            candidates.append(rel.replace(".agents/skills/", ".claude/skills/"))
+        component = rel.split("/", 1)[0] in ("backend", "frontend", "mobile", "infra")
+        if component:
+            root_rel = rel.split("/", 1)[1]
+            candidates.extend([root_rel, root_rel.replace(".agents/skills/", ".claude/skills/")])
+        for previous in dict.fromkeys(candidates):
+            previous_entry = entry(m, previous)
+            previous_file = ROOT / previous
+            if previous_entry and previous_file.is_file() and sha(previous_file) != previous_entry["base"]:
+                data = previous_file.read_bytes()  # preserve project adaptations in new native scopes
+                if component and previous.split("/", 1)[0] not in ("backend", "frontend", "mobile", "infra"):
+                    data = data.replace(b"../../../docs/", b"../../../../docs/")
+                break
+    dst.write_bytes(data)
+    shutil.copymode(src, dst)
 
 
 def cmd_apply(_: argparse.Namespace) -> None:
     """Copy new + cleanly-updatable files and record them; list what needs a manual merge."""
     m, today = load(), dt.date.today().isoformat()
+    requested = getattr(_, "agent", None)
+    # Existing manifests predate dual-agent support and belong to Claude.
+    m.setdefault("initialized_agent", "claude" if m.get("installed_on") else requested or detect_agent())
+    m.setdefault("preferred_agent", m["initialized_agent"])
+    if requested and not m.get("installed_on"):
+        m["preferred_agent"] = requested
+    m["schema_version"] = 2
+    m["supported_agents"] = ["claude", "codex"]
     plan = classify(m)
     for rel in plan["new"] + plan["update"]:
         copy(m, rel)
     for rel in plan["new"] + plan["update"] + plan["unchanged"] + plan["seed-kept"]:
         record(m, rel)
     for p in ("DOCS.md", "handoff.md"):
-        (ROOT / p).touch(exist_ok=True)       # empty → triggers the Bootstrap gate
+        if not (ROOT / p).exists():
+            (ROOT / p).touch()       # empty → triggers the Bootstrap gate
     if m["installed_on"] is None:
         m["installed_on"] = today
-    elif m["base_version"] != base_version():
+    elif m["base_version"] != base_version() and not getattr(_, "configuration_only", False):
         m["upgraded_on"] = today
     save(m)
     print(f"copied {len(plan['new'])} new, {len(plan['update'])} updated.")
@@ -163,11 +236,9 @@ def cmd_apply(_: argparse.Namespace) -> None:
     if plan["removed-upstream"]:
         print("REMOVED UPSTREAM (delete or keep deliberately, then drop from manifest via `resolved`):\n  "
               + "\n  ".join(plan["removed-upstream"]))
-    if not plan["modified"]:
+    if not plan["modified"] and not getattr(_, "configuration_only", False):
         cmd_set_version(_)
-    if plan["new"] and not m.get("upgraded_on"):
-        print("\n*** RESTART THE AGENT SESSION before continuing — hooks and the /bootstrap, /upgrade,"
-              "\n*** /migrate-to-instadash commands only load when a session starts. ***")
+    instructions(requested or current_agent(m.get("preferred_agent", "claude")))
 
 
 def cmd_resolved(a: argparse.Namespace) -> None:
@@ -198,8 +269,8 @@ def cmd_skill(a: argparse.Namespace) -> None:
         m["optional_skills"].append(a.name)
     if a.action == "remove" and a.name in m["optional_skills"]:
         m["optional_skills"].remove(a.name)
-        shutil.rmtree(ROOT / ".claude" / "skills" / a.name, ignore_errors=True)
-        m["files"] = {k: v for k, v in m["files"].items() if not k.startswith(f".claude/skills/{a.name}/")}
+        # apply/plan reports removed-upstream; never recursively delete customized skill files.
+        print("Review removed-upstream files with plan; customized files are preserved.")
     save(m)
     print(f"optional_skills={m['optional_skills']} — run `apply` to sync")
 
@@ -225,7 +296,8 @@ def cmd_issue(a: argparse.Namespace) -> None:
 
 def cmd_wave(a: argparse.Namespace) -> None:
     """Mark a parallel-agent wave as in progress (pauses the Stop hook's handoff check) or ended."""
-    marker = ROOT / ".claude" / "state" / "parallel-wave"
+    sid = hashlib.sha256(a.session.encode()).hexdigest()[:24]
+    marker = ROOT / ".instadash/state" / a.agent / sid / "parallel-wave"
     if a.action == "start":
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(f"{dt.datetime.now().isoformat(timespec='seconds')} {a.note or ''}\n")
@@ -285,7 +357,9 @@ def cmd_check_update(a: argparse.Namespace) -> None:
     else:
         latest = latest_release()
         UPDATE_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        UPDATE_CACHE.write_text(json.dumps({"checked_on": dt.date.today().isoformat(), "latest": latest}))
+        temporary = UPDATE_CACHE.with_name(f"update-check.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps({"checked_on": dt.date.today().isoformat(), "latest": latest}))
+        temporary.replace(UPDATE_CACHE)
     if not latest:
         if not a.quiet:
             print(f"installed {installed}; could not reach GitHub (offline or rate-limited)")
@@ -332,7 +406,7 @@ def cmd_fetch_update(a: argparse.Namespace) -> None:
     got = (dest / "VERSION").read_text().strip() if (dest / "VERSION").is_file() else "?"
     print(f"downloaded {tag} (VERSION {got}) into docs/bootstrap.new/ — review its CHANGELOG, then:\n"
           "  mv docs/bootstrap docs/bootstrap.old && mv docs/bootstrap.new docs/bootstrap\n"
-          "and run /upgrade (delete docs/bootstrap.old once the upgrade is verified).")
+          "and run the current agent's upgrade skill (delete docs/bootstrap.old once verified).")
 
 
 def cmd_meta(a: argparse.Namespace) -> None:
@@ -357,7 +431,7 @@ def cmd_set_version(_: argparse.Namespace) -> None:
             continue
         text = settings.read_text()
         new, n = VERSION_RE.subn(rf'\g<1>"{v}"', text)
-        if n:
+        if n and new != text:
             settings.write_text(new)
             hits.append(settings.relative_to(ROOT).as_posix())
     print(f"base_version={v}; settings updated: {', '.join(hits) or 'none (backend not materialised yet)'}")
@@ -368,7 +442,62 @@ def cmd_status(_: argparse.Namespace) -> None:
     m, plan = load(), classify(load())
     print(json.dumps({"installed": m["base_version"], "available": base_version(),
                       "project": m["project_name"], "legal_entity": m["legal_entity"],
+                      "preferred_agent": m.get("preferred_agent", "claude"),
                       **{k: len(v) for k, v in plan.items()}}, indent=2))
+
+
+def current_agent(fallback: str | None = None) -> str:
+    if os.environ.get("CLAUDE_PROJECT_DIR"):
+        return "claude"
+    if os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_HOME"):
+        return "codex"
+    if fallback:
+        return fallback
+    sys.exit("Specify the current agent with --agent claude or --agent codex.")
+
+
+def detect_agent() -> str:
+    return current_agent()
+
+
+def instructions(agent: str) -> None:
+    prefix = "$" if agent == "codex" else "/"
+    print(f"Native {agent} workflows: {prefix}bootstrap, {prefix}migrate-to-instadash, "
+          f"{prefix}upgrade, {prefix}instadash-agent-migrate.")
+    print("Start a new agent session to reload project instructions. "
+          + ("In Codex CLI, inspect /hooks and review/trust new or changed hooks; "
+             "project configuration must also be trusted. Skill updates normally reload automatically."
+             if agent == "codex" else "Claude loads the installed project settings, hooks and skills at session startup."))
+
+
+def cmd_agent_migrate(a: argparse.Namespace) -> None:
+    if not MANIFEST.is_file():
+        sys.exit("Install first with apply --agent " + a.agent)
+    # Reconcile both adapters, preserving normal merge handling and all mandatory skills.
+    cmd_apply(argparse.Namespace(agent=a.agent, configuration_only=True))
+    m = load()
+    conflicts = classify(m)["modified"]
+    if conflicts:
+        sys.exit("Resolve the listed modified files before switching the preferred agent, then retry agent-migrate.")
+    previous = m.get("preferred_agent", "claude")
+    m["preferred_agent"] = a.agent
+    m.setdefault("initialized_agent", previous)
+    save(m)
+    print(f"Preferred agent: {previous} -> {a.agent}. Application code was not migrated.")
+    instructions(a.agent)
+
+
+def cmd_doctor(a: argparse.Namespace) -> None:
+    m = load()
+    plan = classify(m)
+    print(json.dumps({"workspace": str(ROOT), "current_agent": a.agent,
+                      "initialized_agent": m.get("initialized_agent", "claude"),
+                      "preferred_agent": m.get("preferred_agent", "claude"),
+                      "mandatory_skills": sorted(p.name for p in CORE.iterdir() if p.is_dir()),
+                      "missing_files": plan["new"], "merges_needed": plan["modified"],
+                      "hook_trust": "Check in the native client; filesystem presence does not prove activation",
+                      "native_runtime": "Not tested by doctor"}, indent=2))
+    instructions(a.agent)
 
 
 def main() -> None:
@@ -378,7 +507,15 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("plan").set_defaults(fn=cmd_plan)
-    sub.add_parser("apply").set_defaults(fn=cmd_apply)
+    ap = sub.add_parser("apply")
+    ap.add_argument("--agent", choices=["claude", "codex"])
+    ap.set_defaults(fn=cmd_apply)
+    am = sub.add_parser("agent-migrate", help="switch preferred agent, preserving both native integrations")
+    am.add_argument("--agent", required=True, choices=["claude", "codex"])
+    am.set_defaults(fn=cmd_agent_migrate)
+    doctor = sub.add_parser("doctor")
+    doctor.add_argument("--agent", required=True, choices=["claude", "codex"])
+    doctor.set_defaults(fn=cmd_doctor)
     r = sub.add_parser("resolved"); r.add_argument("paths", nargs="+"); r.set_defaults(fn=cmd_resolved)
     mt = sub.add_parser("meta")
     mt.add_argument("--project-name", dest="project_name"); mt.add_argument("--slug")
@@ -394,6 +531,8 @@ def main() -> None:
         fn=cmd_fetch_update)
     wv = sub.add_parser("wave", help="parallel-agent wave marker for the Stop hook")
     wv.add_argument("action", choices=["start", "end", "status"]); wv.add_argument("--note")
+    wv.add_argument("--agent", required=True, choices=["claude", "codex"])
+    wv.add_argument("--session", required=True, help="native hook session_id; scopes the pause to this session")
     wv.set_defaults(fn=cmd_wave)
     iss = sub.add_parser("issue", help="print a prefilled GitHub issue link for a base-kit bug")
     iss.add_argument("--title", required=True)

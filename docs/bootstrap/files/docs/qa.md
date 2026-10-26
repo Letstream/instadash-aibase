@@ -29,7 +29,8 @@ Optionally, before a release: `cd infra && docker compose --profile app up -d --
 §2 against the containerised stack ([infra](./infra.md)).
 
 ## 2. Driving Chrome (Chrome DevTools MCP)
-Tools: `mcp__plugin_chrome-devtools-mcp_chrome-devtools__*` — `new_page`, `navigate_page`,
+Discover available Chrome DevTools/browser tools by capability. In Claude these may be
+`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*` — `new_page`, `navigate_page`,
 `take_snapshot` (a11y tree; use its `uid`s), `click`, `fill`, `fill_form`, `press_key`,
 `take_screenshot`, `list_console_messages`, `list_network_requests`, `evaluate_script`, `wait_for`,
 `resize_page`, `lighthouse_audit`. Skills: `chrome-devtools`, `a11y-debugging`.
@@ -66,3 +67,6 @@ Run the missing-header check in [license-header.md](./bootstrap/license-header.m
 ## 6. Record
 Update `handoff.md`: each journey ✅ only after observing it work, plus test results and any
 console/network errors found. **Never report green on red.**
+
+Use equivalent available browser tools in Codex. Preserve Chrome verification and screenshot
+evidence requirements; report any unavailable capabilities as unverified.

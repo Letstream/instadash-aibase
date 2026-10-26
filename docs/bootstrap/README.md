@@ -18,8 +18,13 @@ Version: see [`VERSION`](./VERSION) · changes: [`CHANGELOG.md`](./CHANGELOG.md)
 2. Open an agent (Claude Code, Codex, …) in `<project-root>` and say:
    **"Read docs/bootstrap folder and do the initial steps"**.
    The agent follows [`install.md`](./install.md): copies [`files/`](./files/) into place (`AGENTS.md`,
-   `CLAUDE.md`, `.claude/`, `docs/…`), writes the `.instadash.json` manifest, and creates empty
+   `CLAUDE.md`, both native adapter directories, `.instadash/`, `docs/…`), writes the `.instadash.json` manifest, and creates empty
    `DOCS.md` / `handoff.md`.
+3. Read [agent compatibility](./agent-compatibility.md): both native integrations and all core
+   skills are installed. Claude uses `/bootstrap`, `/upgrade`, `/migrate-to-instadash`; Codex uses
+   `$bootstrap`, `$upgrade`, `$migrate-to-instadash`. On agent switches use
+   `instadash-agent-migrate`, not application migration. Present only the current agent's syntax.
+
 3. Then:
    - **`/bootstrap`** (or just type `Bootstrap`) — new project: the interview in
      [`interview.md`](./interview.md), then scaffolds, infra and dev script.
@@ -28,8 +33,8 @@ Version: see [`VERSION`](./VERSION) · changes: [`CHANGELOG.md`](./CHANGELOG.md)
    - **`/upgrade`** — after copying a **newer** version of this folder over `docs/bootstrap/`:
      follows [`upgrade.md`](./upgrade.md).
 
-   ⚠️ **Restart the agent session after install** — hooks and these commands load only when a session
-   starts.
+   ⚠️ **Restart the agent session after install** — instructions reload on a new session. Codex skills normally refresh automatically;
+   review/trust Codex native hooks in the client (CLI `/hooks`).
 
 ## What's inside
 
@@ -41,10 +46,10 @@ Version: see [`VERSION`](./VERSION) · changes: [`CHANGELOG.md`](./CHANGELOG.md)
 | [`migrate.md`](./migrate.md) | moving an existing codebase onto this architecture | — |
 | [`license-header.md`](./license-header.md) | the license header rule, per-language forms | — |
 | [`skills-hub.md`](./skills-hub.md) | skill tiers, requirement → skill map, vetting procedure (`/skills-hub`) | — |
-| [`skills/`](./skills/) | optional vendored skills (enabled per project) | `.claude/skills/` when enabled |
+| [`skills/`](./skills/) | optional vendored skills (enabled per project) | both native skill directories when enabled |
 | [`templates/`](./templates/) | `DOCS.md`, `handoff.md` templates | filled into project root at Bootstrap |
 | [`scaffold/`](./scaffold/) | exact starter code (as Markdown) for `backend/` and `frontend/` | materialised into those repos at Bootstrap |
-| [`files/`](./files/) | agent rules, `.claude/` (settings, hooks, skills), `docs/` (guidelines, setup, security, QA…) | project root, same relative paths |
+| [`files/`](./files/) | agent rules, native settings, shared hooks, `docs/` (guidelines, setup, security, QA…) | project root, same relative paths |
 | [`tools/instadash.py`](./tools/instadash.py) | install/upgrade helper (plan / apply / resolved / meta / set-version / status) | — (runs from here) |
 
 ## Lineage
@@ -58,3 +63,9 @@ header. `/upgrade` keeps both in sync. Every source file carries the project lic
 
 Edit files **here** (never an installed copy), bump [`VERSION`](./VERSION) (`MAJOR.MINOR`), and add a
 [`CHANGELOG.md`](./CHANGELOG.md) entry describing what changed and any manual upgrade steps.
+
+## Shared integration sources
+
+`core-skills/` is the mandatory skill source for both agents. `skills/` keeps the existing optional
+stack additions. `files/.instadash/hooks/` holds shared checks; `.claude/settings.json` and
+`.codex/hooks.json` are native adapters. See [agent migration](./agent-migrate.md) for switching.

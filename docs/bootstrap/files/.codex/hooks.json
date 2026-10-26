@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" codex",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" codex",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|apply_patch|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" codex",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" codex",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -4,6 +4,26 @@
 Each entry lists what changed and any **manual upgrade steps** `/upgrade` must perform beyond
 file syncing (renames, data migrations, new env vars, new infra services).
 
+## 1.2 — 2026-10-26
+- Native Claude Code and Codex integration, with the same mandatory core skills. Core sources moved
+  to `core-skills/`; shared hook logic lives in `.instadash/hooks/` and state in `.instadash/state/`.
+- Native command handovers, `initialized_agent`/`preferred_agent` metadata, agent mismatch notices,
+  `instadash-agent-migrate` workflow, and installation diagnostics (`doctor`).
+- Codex multi-file patches and shell writes feed shared formatting/license/security checks.
+- Component repositories receive local instruction entry points, skills and hook configuration.
+- Existing project skill adaptations are preserved when introducing Codex destinations. Existing
+  settings require normal managed-file merge review. Frontend rules respect host/user precedence.
+
+**Manual upgrade steps:**
+1. Apply and merge managed files in both native directories, preserving local settings/skills.
+   Keep legacy Claude hook adapters. Resolve duplicate hook registrations if existing Codex config
+   already has inline hooks. See `agent-compatibility.md` and `upgrade.md`.
+2. Legacy manifests default to Claude. Switch only by the user's native `instadash-agent-migrate`
+   command; application migration remains separate. Restart the current client; review/trust
+   Codex project hooks. Do not claim activation until verified in the actual client.
+3. Re-run apply after component directories are created. Parallel-wave commands now require
+   `--agent` and `--session`; omit a pause when the native session id is unavailable.
+
 ## 1.1 — 2026-09-28
 Fixes reported while bootstrapping a real project.
 - **Celery on RabbitMQ 4.x:** workers crash-looped (`Feature 'transient_nonexcl_queues' is deprecated`). Scaffold sets `CELERY_CONTROL_QUEUE_EXCLUSIVE = True`; worker commands use `--without-gossip --without-mingle`.

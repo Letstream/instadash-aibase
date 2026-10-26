@@ -10,10 +10,10 @@
 
 | Tier | Where it lives | Who enables it | Managed by `/upgrade` |
 |---|---|---|---|
-| **Project skills** (ours) | `files/.claude/skills/` | always installed | yes |
-| **Core vendored** | `files/.claude/skills/` | always installed | yes |
+| **Project skills** (ours) | `core-skills/` | always installed | yes |
+| **Core vendored** | `core-skills/` | always installed | yes |
 | **Optional vendored** | `docs/bootstrap/skills/` | Bootstrap / `instadash.py skill add <name>` + `apply` | yes |
-| **Hub (not vendored)** | upstream repo | `/skills-hub` vets + vendors into the project's `.claude/skills/` | no — project-owned; record in `DOCS.md` §3 |
+| **Hub (not vendored)** | upstream repo | `/skills-hub` vets + vendors into the project's native skill directories (`.claude/skills/` and `.agents/skills/`) | no — project-owned; record in `DOCS.md` §3 |
 
 **Project skills:** `bootstrap`, `upgrade`, `migrate-to-instadash`, `skills-hub`,
 `frontend-design-guidelines`.
@@ -97,7 +97,7 @@ through §3. Skills that clash with the stack are listed so they're *not* propos
    or run remote code, exfiltrate data, run destructive commands, or add telemetry. Prefer
    Markdown-only skills; a skill with scripts needs the user's explicit OK after you summarise them.
 3. **Check the license** (MIT upstream) and copy it as `LICENSE` into the skill folder.
-4. **Vendor** into the project's `.claude/skills/<name>/` (never into `docs/bootstrap/` inside a
+4. **Vendor** into the project's `.claude/skills/<name>/` and `.agents/skills/<name>/` (never into `docs/bootstrap/` inside a
    project). Add `UPSTREAM.md` (repo, path, commit, date, license, local modifications).
 5. **Adapt** `SKILL.md` with marked blocks (`<!-- instadash: begin/end -->`): an *Instadash stack
    mapping* table for every piece of upstream advice that conflicts with the
@@ -107,5 +107,8 @@ through §3. Skills that clash with the stack are listed so they're *not* propos
    session so it loads.
 
 Promoting a hub skill into the base (maintainers only): vendor it into `docs/bootstrap/skills/`
-(optional) or `files/.claude/skills/` (core) in the base source repo, update this page and the
+(optional) or `core-skills/` (core) in the base source repo, update this page and the
 CHANGELOG.
+
+Core skills remain mandatory for both agents. Sources in `core-skills/` are copied to both native
+directories; keep user-facing command syntax aligned with the current agent. See [compatibility](./agent-compatibility.md).

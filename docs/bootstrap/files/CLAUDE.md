@@ -5,6 +5,9 @@ Claude Code entry point. The full rulebook is [`AGENTS.md`](./AGENTS.md) (import
 shared with other agents, so edit rules **there**, not here. This file only restates the
 non-negotiables that must hold on **every** turn.
 
+Native Claude commands use `/`. Read `docs/bootstrap/agent-compatibility.md` for agent preference
+checks; an agent switch uses `/instadash-agent-migrate`, not `/migrate-to-instadash`.
+
 ## Every turn
 
 1. **Bootstrap gate.** `DOCS.md` or `handoff.md` empty → fresh repo: run the Bootstrap flow
@@ -18,7 +21,7 @@ non-negotiables that must hold on **every** turn.
    wins over anything else. If you must diverge, update the guideline and say why.
 4. **Write the docs.** Update the touched `docs/` page(s), `DOCS.md` when the overview changes, and
    **always** `handoff.md` (human journal) before you stop; save agent state with the `remember`
-   skill when a work session ends. (A Stop hook blocks ending a turn when code changed
+   skill when available when a work session ends. (A Stop hook blocks ending a turn when code changed
    but `handoff.md` didn't.)
 5. **Prove it.** Tests + lint + type-check + run it + verify in Chrome before saying "done".
 6. **No secrets** in tracked files — ever.

@@ -16,11 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-mark.sh"
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/update-check.sh",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" claude",
             "timeout": 10
           }
         ]
@@ -31,18 +27,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prompt-gate.sh"
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" claude",
+            "timeout": 10
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|apply_patch|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-lint.sh",
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" claude",
             "timeout": 60
           }
         ]
@@ -53,7 +50,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-handoff.sh"
+            "command": "p=\"$PWD\"; while [ ! -f \"$p/.instadash/hooks/runtime.py\" ]; do [ \"$p\" != / ] || exit 0; p=$(dirname \"$p\"); done; exec python3 \"$p/.instadash/hooks/runtime.py\" claude",
+            "timeout": 10
           }
         ]
       }

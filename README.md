@@ -1,7 +1,7 @@
 # Instadash AI Base
 
 **An opinionated, AI-agent-ready foundation for building production SaaS products with Claude Code
-(and other coding agents).** Drop one folder into a project and your agent gets a complete rulebook,
+and Codex.** Drop one folder into a project and your agent gets a complete rulebook,
 architecture guidelines, exact starter code, safety hooks and vetted skills — so every project it
 builds looks, behaves and scales the same way.
 
@@ -50,6 +50,18 @@ By [Letstream](https://www.theletstream.com).
      rebuilds it slice by slice with data import and parity checks. The legacy app stays untouched
      until you sign off.
 
+## Native agent support
+
+Both Claude Code and Codex integrations are installed together, including every mandatory core
+skill. Claude uses `/bootstrap`, `/upgrade`, `/migrate-to-instadash` and `/skills-hub`; Codex uses
+`$bootstrap`, `$upgrade`, `$migrate-to-instadash` and `$skills-hub`. Instructions shown during
+installation and upgrade follow the agent currently being used.
+
+Projects record their initialized and preferred agent. Opening the other agent shows a notice;
+use `/instadash-agent-migrate` in Claude or `$instadash-agent-migrate` in Codex to switch preference
+and reconcile configuration. This does not rebuild the application. Codex native hooks require
+review/trust in the client (CLI `/hooks`). See [compatibility](docs/bootstrap/agent-compatibility.md).
+
 ## Commands
 
 | Command | What it does |
@@ -67,7 +79,10 @@ my-product/                 # shared docs & agent config (not a git repo)
 ├── DOCS.md                 # the project's single source of truth
 ├── handoff.md              # human-readable build journal
 ├── .instadash.json         # base version + managed-file manifest
-├── .claude/                # settings, hooks, skills
+├── .claude/                # Claude settings, compatibility adapters, skills
+├── .agents/skills/         # Codex skills (same mandatory set)
+├── .codex/hooks.json       # Codex native hooks (review/trust in client)
+├── .instadash/             # shared hooks and ignored runtime state
 ├── docs/
 │   ├── bootstrap/          # this base (replaced on upgrade)
 │   ├── architecture-guidelines/  setup.md  infra.md  security.md  qa.md  …
@@ -96,7 +111,8 @@ confirmation; `INSTADASH_BASE_VERSION` and the manifest are bumped. See
 docs/bootstrap/             # ← the whole shippable base
 ├── README.md  VERSION  CHANGELOG.md
 ├── install.md  interview.md  migrate.md  upgrade.md  license-header.md  skills-hub.md
-├── files/                  # installed into projects (AGENTS.md, CLAUDE.md, .claude/, docs/)
+├── files/                  # shared rules/hooks/docs and native agent settings
+├── core-skills/            # mandatory skill source for both agents
 ├── scaffold/               # backend/, frontend/, mobile/ starter code as Markdown
 ├── skills/                 # optional skills enabled per project
 ├── templates/              # DOCS.md and handoff.md templates
@@ -116,7 +132,7 @@ credentials, customer data or internal hostnames in issues or pull requests.
 
 ## Third-party content
 
-Several skills under `docs/bootstrap/files/.claude/skills/` and `docs/bootstrap/skills/` are vendored
+Several skills under `docs/bootstrap/core-skills/` and `docs/bootstrap/skills/` are vendored
 from [Jeffallan/claude-skills](https://github.com/Jeffallan/claude-skills) under the MIT License.
 Each keeps its `LICENSE` and an `UPSTREAM.md` describing the source commit and local modifications.
 Those files remain under their original license.

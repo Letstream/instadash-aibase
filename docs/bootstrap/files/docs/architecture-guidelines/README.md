@@ -74,7 +74,7 @@ If any page, snippet, or skill disagrees with this table, **this table is right*
 | [frontend/project-structure](frontend/project-structure.md) | Directory layout, tooling & bootstrap, the API layer (endpoint registry + interceptor client), Pinia state + RBAC getters, multi-tenant routing/guards, layouts & feature-folder views, the three-layer design-token pipeline. |
 | [frontend/shared-components](frontend/shared-components.md) | Using the generic shells: philosophy, and the public API + usage of generic table/list, drawer/sidebar, dialogs, the form seam / form generator, plus the shared-component catalogue. |
 | [frontend/building-shared-components](frontend/building-shared-components.md) | **Authoring** the shells: when to promote, internal decomposition, and implementation skeletons for self-fetching URL-synced lists, the type-switch renderer, the dynamic host + ref-driven actions, dialogs, and the form seam. |
-| [frontend/design-guidelines](frontend/design-guidelines.md) | Pointer only — the design/coding rules live in the **`frontend-design-guidelines` skill** (`.claude/skills/frontend-design-guidelines/SKILL.md`). Load it before any frontend work. |
+| [frontend/design-guidelines](frontend/design-guidelines.md) | Pointer only — the design/coding rules live in the **`frontend-design-guidelines` skill** (`.claude/skills/frontend-design-guidelines/SKILL.md` (Claude) or `.agents/skills/frontend-design-guidelines/SKILL.md` (Codex)). Load it before any frontend work. |
 | [frontend/testing](frontend/testing.md) | Vitest: what's unit-testable (models, resources, stores, composables, utils, guards), layout, mocking, coverage. |
 
 ---

@@ -2,7 +2,8 @@
 # Frontend Design & Coding Guidelines — moved
 
 > **The rules live in one place: the `frontend-design-guidelines` skill at
-> [`.claude/skills/frontend-design-guidelines/SKILL.md`](../../../.claude/skills/frontend-design-guidelines/SKILL.md).**
+> [Claude skill](../../../.claude/skills/frontend-design-guidelines/SKILL.md) or
+> [Codex skill](../../../.agents/skills/frontend-design-guidelines/SKILL.md).**
 >
 > Agents **must load that skill before any `.vue` / `.ts` / `.scss` / `.css` work**. It is the
 > single source of truth for component architecture, Tailwind v4 + scoped SCSS rules (≤ ~3 inline

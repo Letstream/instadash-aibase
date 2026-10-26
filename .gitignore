@@ -1,6 +1,7 @@
 # local agent state — never publish
 .remember/
 .claude/state/
+.instadash/state/
 .claude/settings.local.json
 scratchpad/
 

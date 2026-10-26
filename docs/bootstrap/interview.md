@@ -131,3 +131,10 @@
 
 The project is bootstrapped when `DOCS.md` and `handoff.md` are non-empty and the health check is
 green. From then on, the normal workflow in [`AGENTS.md`](../../AGENTS.md) applies.
+
+## Native integration after materializing repositories
+
+Run `python3 docs/bootstrap/tools/instadash.py apply --agent <current-agent>` after creating component directories, then
+resolve any existing-file merges. This installs component-local agent entry points and skills so
+either native client can start inside a component Git repo. Preserve the preferred agent and use
+its current host's command syntax in the handover; see [agent-compatibility.md](./agent-compatibility.md).
