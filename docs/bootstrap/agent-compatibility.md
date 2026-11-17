@@ -63,3 +63,10 @@ not a complete security boundary; run explicit lint/tests and verification befor
 
 `python3 docs/bootstrap/tools/instadash.py doctor --agent <current-agent>` reports installation
 and merge status. Verify hook execution in each actual client before claiming native runtime parity.
+
+## Hook performance
+
+Version 1.3 uses a project-local native watcher on Linux, shared across both agents. Read-only tools
+bypass tracking; normal mutation hooks and Stop consume change cursors instead of recursive scans.
+Dependency/cache/output and `.gitignore` exclusions apply before watching. See
+[hook tracking](hook-tracking.md) for scope, fallback, configuration and upgrade behavior.

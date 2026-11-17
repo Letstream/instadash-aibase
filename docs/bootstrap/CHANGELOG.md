@@ -4,6 +4,28 @@
 Each entry lists what changed and any **manual upgrade steps** `/upgrade` must perform beyond
 file syncing (renames, data migrations, new env vars, new infra services).
 
+## 1.3 — 2026-11-17
+- Replace repeated hook snapshots with one shared, project-local Linux inotify watcher and durable
+  change journal. Idle watching does not poll; normal hooks/Stop consume only changed paths.
+- Skip read/search tools. Recognize native shell tools, use explicit edit paths, serialize formatting
+  across agents and refresh only formatted files instead of scanning the tree twice.
+- Prune virtual environments, dependencies, caches, outputs and hook state before registering
+  watches. Honor nested project `.gitignore` rules, including negations, using Git's matcher;
+  include relevant files outside Git and never follow symlinks outside (or inside) the project.
+- Version syncing now prunes virtual environments/dependencies before traversing backend settings.
+- Recover edits/deletions after watcher restart/overflow; retain handoff checks and a portable
+  single-scan fallback. See [hook tracking](hook-tracking.md).
+
+**Manual upgrade steps:**
+1. Apply the managed hook files and merge native matcher changes without discarding local settings.
+   Existing edit/patch/Bash registrations load the new runtime on their next invocation; running
+   invocations finish with the old code. Reload/review native configuration to enable any newly
+   supported tool names. No application/data migration or service restart is required.
+2. Git must be on PATH. Add project-specific generated directory names to `watch_exclude_dirs` in
+   `.instadash.json` if needed. Git-ignored files are now intentionally excluded from monitoring.
+3. Linux automatically shares one watcher per installed project; other Unix hosts use the
+   single-scan fallback. Existing 1.2 session baselines convert without discarding pending changes.
+
 ## 1.2 — 2026-10-26
 - Native Claude Code and Codex integration, with the same mandatory core skills. Core sources moved
   to `core-skills/`; shared hook logic lives in `.instadash/hooks/` and state in `.instadash/state/`.

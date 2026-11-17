@@ -426,8 +426,14 @@ def cmd_set_version(_: argparse.Namespace) -> None:
     m["base_version"] = v
     save(m)
     hits = []
-    for settings in (ROOT / "backend").glob("**/settings/base.py") if (ROOT / "backend").is_dir() else []:
-        if ".venv" in settings.parts:
+    # Prune before descending: filtering .venv after a recursive glob still walks it.
+    skip = {".git", ".venv", "venv", "env", "node_modules", "dist", "build", "data", ".local"}
+    for directory, dirs, files in os.walk(ROOT / "backend", followlinks=False):
+        dirs[:] = [name for name in dirs if name not in skip and not (Path(directory) / name).is_symlink()]
+        if Path(directory).name != "settings" or "base.py" not in files:
+            continue
+        settings = Path(directory) / "base.py"
+        if settings.is_symlink():
             continue
         text = settings.read_text()
         new, n = VERSION_RE.subn(rf'\g<1>"{v}"', text)

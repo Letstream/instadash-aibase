@@ -3,6 +3,9 @@
 """Native hook adapters with shared project checks. No transcript or credential access."""
 from __future__ import annotations
 
+from change_tracker import MUTATING_TOOLS, SKIP, Tracking, lock
+from license_header import SCOPES, SKIP_NAMES, style_for
+
 import hashlib
 import json
 import os
@@ -13,29 +16,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-SKIP = {'.git', '.venv', 'node_modules', 'dist', 'build', 'data', '__pycache__',
-        '.pytest_cache', 'staticfiles', 'coverage', '.vite', '.dart_tool', '.ruff_cache',
-        '.mypy_cache', 'htmlcov', '.instadash', '.agents', '.claude', '.codex'}
-
-
-def snapshot() -> dict[str, int]:
-    """Bound traversal to application directories; omit generated files and symlinks."""
-    result = {}
-    for name in ('backend', 'frontend', 'mobile', 'infra', 'scripts'):
-        directory = ROOT / name
-        if not directory.is_dir() or directory.is_symlink():
-            continue
-        for base, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in SKIP and not (Path(base) / d).is_symlink()]
-            for name in files:
-                path = Path(base) / name
-                if path.is_symlink() or name.endswith(('.log', '.pid', '.pyc')) or name.startswith('.coverage'):
-                    continue
-                try:
-                    result[str(path.relative_to(ROOT))] = path.stat().st_mtime_ns
-                except FileNotFoundError:
-                    pass
-    return result
+SOURCE_TYPES = {'.py', '.vue', '.ts', '.tsx', '.js', '.mjs', '.cjs',
+                '.scss', '.css', '.json', '.dart'}
 
 
 def atomic_json(path: Path, data: dict) -> None:
@@ -100,17 +82,97 @@ def patch_files(event: dict) -> list[str]:
     patch = inputs.get('command', inputs.get('input', ''))
     if not isinstance(patch, str):
         return []
-    return re.findall(r'^\*\*\* (?:Add File|Update File|Move to): (.+)$', patch, flags=re.M)
+    return re.findall(r'^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$', patch, flags=re.M)
+
+
+def file_names(event: dict) -> list[str]:
+    """Normalize explicit edit paths without resolving symlinks into other projects."""
+    names = []
+    inputs = event.get('tool_input') or {}
+    values = patch_files(event)
+    if isinstance(inputs, dict):
+        for edit in inputs.get('edits', []):
+            if isinstance(edit, dict) and edit.get('file_path'):
+                values.append(edit['file_path'])
+    for name in values:
+        path = Path(name) if Path(name).is_absolute() else Path(event.get('cwd') or ROOT) / name
+        path = Path(os.path.abspath(path))
+        if path.is_relative_to(ROOT):
+            names.append(path.relative_to(ROOT).as_posix())
+    return list(dict.fromkeys(names))
+
+
+def mark_dirty(state: Path, changes: dict, seen_ns: int) -> None:
+    """Preserve pre-formatter timestamps so code+handoff shell writes satisfy the gate."""
+    handoff = ROOT / 'handoff.md'
+    handoff_stamp = handoff.stat().st_mtime_ns if handoff.exists() else 0
+    stamps = []
+    for name, change in changes.items():
+        if name in {'DOCS.md', 'handoff.md'}:
+            continue
+        stamp = change['origin']
+        if stamp is None:
+            stamp = handoff_stamp if handoff_stamp > seen_ns else time.time_ns()
+        stamps.append(stamp)
+    if stamps:
+        dirty = state / 'dirty.json'
+        previous = json.loads(dirty.read_text()).get('stamp', 0) if dirty.exists() else 0
+        atomic_json(dirty, {'stamp': max(previous, *stamps)})
+
+
+def process_changes(event: dict, state: Path, baseline: Path, sid: str) -> list[str]:
+    context = []
+    before = json.loads(baseline.read_text()) if baseline.exists() else {}
+    paths = file_names(event)
+    direct = event.get('tool_name') in {'Edit', 'Write', 'MultiEdit', 'apply_patch', 'functions.apply_patch'}
+    tracking = Tracking(ROOT, before, paths, direct=direct)
+    try:
+        changes = tracking.result['changes']
+        mark_dirty(state, changes, before.get('seen_ns', baseline.stat().st_mtime_ns if baseline.exists() else 0))
+        formatted = {}
+        env = dict(os.environ, INSTADASH_PROJECT_DIR=str(ROOT), INSTADASH_SESSION_DIR=str(state))
+        for name, change in changes.items():
+            if change['stamp'] is None or change['formatted']:
+                continue
+            path = ROOT / name
+            license_eligible = (Path(name).parts[0] in SCOPES and path.name not in SKIP_NAMES
+                                and style_for(path) is not None)
+            if 'migrations' in Path(name).parts or not (path.suffix in SOURCE_TYPES or license_eligible):
+                formatted[name] = change['origin']
+                continue
+            # Scope / gitignore filtering is performed by the tracker, including explicit paths.
+            if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(ROOT):
+                continue
+            result = subprocess.run(['bash', str(ROOT / '.instadash/hooks/format-lint.sh')],
+                                    input=json.dumps({'session_id': sid, 'tool_input': {'file_path': str(path)}}),
+                                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=50)
+            if result.returncode:
+                context.append(result.stderr[:6000])
+            else:
+                formatted[name] = change['origin']
+            if result.stdout.strip():
+                try:
+                    context.append(json.loads(result.stdout)['hookSpecificOutput']['additionalContext'])
+                except (ValueError, KeyError):
+                    context.append(result.stdout[:2000])
+        # Only stat acknowledged paths; a second tree scan is never needed after formatting.
+        tracking.acknowledge(formatted)
+        atomic_json(baseline, tracking.checkpoint())
+    finally:
+        tracking.close()
+    return context
 
 
 def main() -> None:
     agent = sys.argv[1]
+    event = json.load(sys.stdin)
+    kind = event.get('hook_event_name')
+    # Defense in depth when clients dispatch more tools than the native matcher selects.
+    if kind == 'PostToolUse' and event.get('tool_name') not in MUTATING_TOOLS:
+        return
     if agent not in ('claude', 'codex') or not (ROOT / '.instadash.json').is_file():
         return
-    event = json.load(sys.stdin)
-    manifest = json.loads((ROOT / '.instadash.json').read_text())
-    kind = event.get('hook_event_name')
-    # Never use untrusted session ids as filesystem paths. Subagents may share a parent id.
+    manifest = json.loads((ROOT / '.instadash.json').read_text()) if kind in ('SessionStart', 'UserPromptSubmit') else {}
     sid = hashlib.sha256(str(event.get('session_id', 'default')).encode()).hexdigest()[:24]
     state = ROOT / '.instadash/state' / agent / sid
     state.mkdir(parents=True, exist_ok=True)
@@ -122,8 +184,12 @@ def main() -> None:
         (state / 'notified').touch()
     if kind == 'SessionStart':
         if not baseline.exists():
-            atomic_json(baseline, snapshot())
-        # Preserve the session baseline on resume/compaction.
+            with lock(ROOT / '.instadash/state/tracker/format.lock'):
+                tracking = Tracking(ROOT, {}, [])
+                try:
+                    atomic_json(baseline, tracking.checkpoint())
+                finally:
+                    tracking.close()
         try:
             result = subprocess.run([sys.executable, str(ROOT / 'docs/bootstrap/tools/instadash.py'),
                                      'check-update', '--quiet', '--cached'], cwd=ROOT,
@@ -131,48 +197,12 @@ def main() -> None:
             if result.returncode == 0 and result.stdout.strip():
                 context.append('Base update available: '+result.stdout.strip()+'. Mention once; do not upgrade automatically.')
         except subprocess.TimeoutExpired:
-            pass  # Offline update checks must not break startup policy/context.
-
+            pass
     elif kind == 'UserPromptSubmit':
         context.append(prompt_context(agent, event, manifest))
     elif kind == 'PostToolUse':
-        before = json.loads(baseline.read_text()) if baseline.exists() else snapshot()
-        files = patch_files(event)
-        observed = snapshot()
-        # Shell writes have no file_path. Compare bounded application snapshots, including new files.
-        if event.get('tool_name') in ('Bash', 'exec_command', 'write_stdin') and baseline.exists():
-            before = json.loads(baseline.read_text())
-            files.extend(p for p, stamp in observed.items() if stamp != before.get(p))
-        env = dict(os.environ, INSTADASH_PROJECT_DIR=str(ROOT), INSTADASH_SESSION_DIR=str(state))
-        for name in dict.fromkeys(files):
-            path = Path(name) if Path(name).is_absolute() else Path(event.get('cwd') or ROOT) / name
-            path = path.resolve()
-            if not path.is_relative_to(ROOT) or not path.is_file() or any(p in SKIP for p in path.relative_to(ROOT).parts):
-                continue
-            result = subprocess.run(['bash', str(ROOT / '.instadash/hooks/format-lint.sh')],
-                                    input=json.dumps({'session_id': sid, 'tool_input': {'file_path': str(path)}}),
-                                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=50)
-            if result.returncode:
-                context.append(result.stderr[:6000])
-            if result.stdout.strip():
-                try:
-                    context.append(json.loads(result.stdout)['hookSpecificOutput']['additionalContext'])
-                except (ValueError, KeyError):
-                    context.append(result.stdout[:2000])
-        after = snapshot()
-        # Formatting is part of this edit; a handoff written after the user's code write
-        # remains valid even if the formatter finishes after that handoff write.
-        stamps = [stamp for name, stamp in observed.items() if stamp != before.get(name)]
-        if stamps or set(before) - set(after):
-            stamp = max(stamps, default=time.time_ns())
-            # A shell command may update handoff alongside a deletion.
-            handoff = ROOT / 'handoff.md'
-            if set(before) - set(after) and handoff.exists() and handoff.stat().st_mtime_ns > baseline.stat().st_mtime_ns:
-                stamp = max(stamps, default=handoff.stat().st_mtime_ns)
-            old_dirty = state / 'dirty.json'
-            previous = json.loads(old_dirty.read_text()).get('stamp', 0) if old_dirty.exists() else 0
-            atomic_json(old_dirty, {'stamp': max(previous, stamp)})
-        atomic_json(baseline, after)
+        with lock(ROOT / '.instadash/state/tracker/format.lock'):
+            context.extend(process_changes(event, state, baseline, sid))
     elif kind == 'Stop':
         if event.get('stop_hook_active') or not baseline.exists():
             return
@@ -183,14 +213,15 @@ def main() -> None:
         docs = ROOT / 'DOCS.md'
         if not handoff.exists() or not docs.exists() or not docs.read_text().strip():
             return
-        # Include deleted files and preserve edits observed before the latest shell snapshot.
+        with lock(ROOT / '.instadash/state/tracker/format.lock'):
+            before = json.loads(baseline.read_text())
+            tracking = Tracking(ROOT, before, [])
+            try:
+                mark_dirty(state, tracking.result['changes'], before.get('seen_ns', baseline.stat().st_mtime_ns))
+                atomic_json(baseline, tracking.checkpoint())
+            finally:
+                tracking.close()
         dirty = state / 'dirty.json'
-        before = json.loads(baseline.read_text())
-        after = snapshot()
-        changed = before != after
-        if changed:
-            atomic_json(dirty, {'stamp': max([v for k, v in after.items() if v != before.get(k)], default=time.time_ns())})
-            atomic_json(baseline, after)  # consume direct/deleted writes once; a later handoff can satisfy the gate
         if dirty.exists() and json.loads(dirty.read_text())['stamp'] > handoff.stat().st_mtime_ns:
             print(json.dumps({'decision': 'block', 'reason': 'Application code changed. Update handoff.md (changed / verified / next) and relevant docs before stopping.'}))
         return
@@ -201,6 +232,6 @@ def main() -> None:
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-        print(f'Instadash hook could not complete: {type(exc).__name__}; run instadash.py doctor.', file=sys.stderr)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f'Instadash hook could not complete: {type(exc).__name__}: {exc}; run instadash.py doctor.', file=sys.stderr)
         sys.exit(2)

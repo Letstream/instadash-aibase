@@ -23,6 +23,13 @@ class DualAgentTest(unittest.TestCase):
         shutil.copytree(BASE, self.root / 'docs/bootstrap', ignore=shutil.ignore_patterns('__pycache__'))
         self.tool = self.root / 'docs/bootstrap/tools/instadash.py'
         self.env = dict(os.environ, INSTADASH_NO_UPDATE_CHECK='1', PYTHONDONTWRITEBYTECODE='1')
+        self.addCleanup(self.stop_tracker)
+
+    def stop_tracker(self):
+        script = self.root / '.instadash/hooks/change_tracker.py'
+        if script.exists():
+            subprocess.run([sys.executable, '-B', str(script), '--shutdown', str(self.root)],
+                           capture_output=True, timeout=10, env=self.env)
 
     def cli(self, *args, ok=True, cwd=None):
         result = subprocess.run([sys.executable, str(self.tool), *args], cwd=cwd or self.root,
