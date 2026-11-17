@@ -185,6 +185,16 @@ class TrackerTest(unittest.TestCase):
         (self.root / 'generated-fixture/code.py').write_text('changed\n')
         self.assertEqual(tracker.rpc(self.root, {'cursor': cursor})['changes'], {})
 
+    def test_large_legacy_checkpoint_is_chunked(self):
+        self.ready()
+        self.hook('codex', 'SessionStart')
+        state = next((self.root / '.instadash/state/codex').glob('*/snapshot.json'))
+        old = {f'backend/.venv/{"x" * 250}-{index}.py': 1 for index in range(5000)}
+        old['backend/missing.py'] = 1
+        state.write_text(json.dumps(old))
+        self.assertEqual(self.hook('codex', 'Stop')['decision'], 'block')
+        self.assertGreater(self.tracker().rpc(self.root, {})['pid'], 0)
+
     def test_single_scan_fallback_preserves_handoff(self):
         self.env['INSTADASH_TRACKER_MODE'] = 'scan'
         self.ready()

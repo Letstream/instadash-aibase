@@ -382,6 +382,32 @@ def rpc(root: Path, message: dict) -> dict:
 
 def connect(root: Path, message: dict) -> dict:
     """Lazy startup with one shared instance, safe across concurrent hook processes."""
+    paths = message.get('paths', [])
+    if paths and len(json.dumps(message).encode()) > 262144:
+        # Old sessions can contain thousands of now-excluded dependency paths. Keep every
+        # IPC request below the service input bound instead of failing/restarting tracking.
+        if len(paths) == 1:
+            raise ValueError('Tracker path exceeds the IPC size limit')
+        batches, batch, size = [], [], 0
+        for name in paths:
+            cost = len(json.dumps(name).encode()) + 2
+            if batch and size + cost > 200000:
+                batches.append(batch)
+                batch, size = [], 0
+            batch.append(name)
+            size += cost
+        if batch:
+            batches.append(batch)
+        combined, changes = {}, {}
+        cursor = message.get('cursor', {})
+        for index, batch in enumerate(batches):
+            response = connect(root, dict(message, paths=batch, cursor=cursor,
+                                          all=bool(message.get('all') and index == 0)))
+            changes.update(response['changes'])
+            combined.update(response)
+            cursor = response['cursor']
+        combined['changes'] = changes
+        return combined
     try:
         return rpc(root, message)
     except (ConnectionRefusedError, ConnectionResetError, BrokenPipeError, FileNotFoundError):
